@@ -1,5 +1,11 @@
 # 🎮 Game Hứng Bia
 
+## 📝 Thông tin cá nhân
+- **Họ và tên**: Đào Ngọc Duy  
+- **Mã số sinh viên**: 24022637  
+- **Lớp**: K69I-IS4  
+- **Chủ đề**: Bài tập lớn (làm cá nhân)  
+
 ## 📝 Mô tả
 Game Hứng Bia là một trò chơi giải trí đơn giản, nơi người chơi điều khiển một thùng bia để hứng những chai bia đang rơi xuống. 
 
@@ -36,4 +42,5 @@ Game Hứng Bia là một trò chơi giải trí đơn giản, nơi người ch�
 - **Space**: Kích hoạt tăng tốc (sau khi đạt 60 điểm)
 
 ## 🏆 Mục tiêu
+
 Hứng được 70 chai bia để chiến thắng và xem màn hình kết thúc đặc biệt!
