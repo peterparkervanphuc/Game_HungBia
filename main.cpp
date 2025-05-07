@@ -26,12 +26,29 @@ const int BEER_DELAY = 300;
 const int BUTTON_SIZE = 40;
 const int BUTTON_MARGIN = 10;
 
+const int X2_SPAWN_INTERVAL = 50000; 
+const int X2_EFFECT_DURATION = 8000; 
+const int X2_MIN_BEERS = 35; 
+
 struct Beer {
     int x, y, speed;
     Uint32 spawnTime;
 };
 
+struct X2Icon {
+    int x, y;
+    bool active;
+    Uint32 spawnTime;
+    static const int WIDTH = 40;
+    static const int HEIGHT = 40;
+    static const int FALL_SPEED = 8;
+};
+
 bool showSpeedBoostMessage = false; 
+
+X2Icon x2Icon = {0, 0, false, 0};
+bool x2EffectActive = false;
+Uint32 x2EffectStartTime = 0;
 
 void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
                        std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
@@ -48,6 +65,8 @@ void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen
     max_beers = 1;
     speedBoostUnlocked = false; 
     showSpeedBoostMessage = false;
+    x2Icon.active = false;
+    x2EffectActive = false;
 }
 
 void playBackgroundMusicIfNotPlaying(Mix_Music* backgroundMusic, bool onFrameScreen, bool onVipScreen, bool gameStarted) {
@@ -170,6 +189,12 @@ int main(int argc, char* argv[]) {
     SDL_Texture* hopThoaiTexture = IMG_LoadTexture(renderer, "assets/hopthoai.png");
     if (!hopThoaiTexture) {
         std::cerr << "Failed to load hopthoai texture: " << IMG_GetError() << std::endl;
+        return -1;
+    }
+
+    SDL_Texture* x2IconTexture = IMG_LoadTexture(renderer, "assets/x2.png");
+    if (!x2IconTexture) {
+        std::cerr << "Failed to load x2 icon: " << IMG_GetError() << std::endl;
         return -1;
     }
 
@@ -344,6 +369,37 @@ int main(int argc, char* argv[]) {
             }
 
             if (!paused && gameStarted) {
+                Uint32 currentTime = SDL_GetTicks();
+
+                if (x2EffectActive && currentTime - x2EffectStartTime >= X2_EFFECT_DURATION) {
+                    x2EffectActive = false;
+                }
+
+                if (score >= X2_MIN_BEERS && !x2Icon.active && 
+                    currentTime - x2Icon.spawnTime >= X2_SPAWN_INTERVAL) {
+                    x2Icon.active = true;
+                    x2Icon.x = rand() % (GAME_AREA_WIDTH - X2Icon::WIDTH);
+                    x2Icon.y = 0;
+                    x2Icon.spawnTime = currentTime;
+                }
+
+                if (x2Icon.active) {
+                    x2Icon.y += X2Icon::FALL_SPEED;
+
+                    if (x2Icon.y + X2Icon::HEIGHT >= SCREEN_HEIGHT - PLAYER_HEIGHT &&
+                        x2Icon.x + X2Icon::WIDTH > playerX && 
+                        x2Icon.x < playerX + PLAYER_WIDTH) {
+                        x2Icon.active = false;
+                        x2EffectActive = true;
+                        x2EffectStartTime = currentTime;
+                        Mix_PlayChannel(-1, catchSound, 0);
+                    }
+
+                    if (x2Icon.y > SCREEN_HEIGHT) {
+                        x2Icon.active = false;
+                    }
+                }
+
                 if (score >= 60 && !speedBoostUnlocked) {
                     speedBoostUnlocked = true; 
                     showSpeedBoostMessage = true; 
@@ -361,7 +417,6 @@ int main(int argc, char* argv[]) {
                 if (moveLeft && playerX > 0) playerX -= currentSpeed;
                 if (moveRight && playerX < GAME_AREA_WIDTH - PLAYER_WIDTH) playerX += currentSpeed;
 
-                Uint32 currentTime = SDL_GetTicks();
                 for (auto& beer : beers) {
                     beer.y += beer.speed;
                     if (beer.y > SCREEN_HEIGHT) {
@@ -383,6 +438,9 @@ int main(int argc, char* argv[]) {
                         beer.y = 0;
                         beer.x = rand() % (GAME_AREA_WIDTH - BEER_WIDTH);
                         score++;
+                        if (x2EffectActive) {
+                            score++;
+                        }
                         std::cout << score << std::endl; 
                         Mix_PlayChannel(-1, catchSound, 0);
 
@@ -466,6 +524,10 @@ int main(int argc, char* argv[]) {
                 SDL_Rect beerRect = {beer.x, beer.y, BEER_WIDTH, BEER_HEIGHT};
                 SDL_RenderCopy(renderer, beerTexture, NULL, &beerRect);
             }
+            if (x2Icon.active) {
+                SDL_Rect x2Rect = {x2Icon.x, x2Icon.y, X2Icon::WIDTH, X2Icon::HEIGHT};
+                SDL_RenderCopy(renderer, x2IconTexture, NULL, &x2Rect);
+            }
             SDL_RenderCopy(renderer, backButton, NULL, &backRect);
             SDL_RenderCopy(renderer, playPauseButton, NULL, &playPauseRect);
             SDL_RenderCopy(renderer, infoButton, NULL, &infoRect);
@@ -487,6 +549,19 @@ int main(int argc, char* argv[]) {
                 SDL_RenderCopy(renderer, boostMessageTexture, NULL, &boostMessageRect);
                 SDL_FreeSurface(boostMessageSurface);
                 SDL_DestroyTexture(boostMessageTexture);
+            }
+
+            if (x2EffectActive) {
+                int remainingTime = (X2_EFFECT_DURATION - (SDL_GetTicks() - x2EffectStartTime)) / 1000;
+                std::string x2Text = "X2 SCORE: " + std::to_string(remainingTime) + "s";
+                SDL_Surface* x2Surface = TTF_RenderText_Solid(scoreFont, x2Text.c_str(), whiteColor);
+                if (x2Surface) {
+                    SDL_Texture* x2Texture = SDL_CreateTextureFromSurface(renderer, x2Surface);
+                    SDL_Rect x2Rect = {10, 40, x2Surface->w, x2Surface->h};
+                    SDL_RenderCopy(renderer, x2Texture, NULL, &x2Rect);
+                    SDL_FreeSurface(x2Surface);
+                    SDL_DestroyTexture(x2Texture);
+                }
             }
         }
         SDL_RenderPresent(renderer);
@@ -510,6 +585,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(girl2Texture);
     SDL_DestroyTexture(girl3Texture);
     SDL_DestroyTexture(hopThoaiTexture);
+    SDL_DestroyTexture(x2IconTexture);
     TTF_Quit(); 
     SDL_Quit();
     return 0;
