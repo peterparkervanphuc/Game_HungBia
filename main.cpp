@@ -2,78 +2,21 @@
 #include "include/SDL_image.h"
 #include "include/SDL_ttf.h"
 #include "include/SDL_mixer.h"
+#include "include/Constants.h"
+#include "include/Structures.h"
+#include "include/GameManager.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
 #include <vector>
-#include <string> 
+#include <string>
 
 #undef main
 
-const int SCREEN_WIDTH = 900;
-const int SCREEN_HEIGHT = 800;
-const int GAME_AREA_WIDTH = 600;
-const int INFO_AREA_WIDTH = 300;
-const int PLAYER_WIDTH = 150;
-const int PLAYER_HEIGHT = 80;
-const int BEER_WIDTH = 40;
-const int BEER_HEIGHT = 120;
-const int PLAYER_SPEED = 10;
-const float INITIAL_BEER_SPEED = 3.7; 
-int beer_speed = INITIAL_BEER_SPEED;
-int max_beers = 1;
-const int BEER_DELAY = 300;
-const int BUTTON_SIZE = 40;
-const int BUTTON_MARGIN = 10;
-
-const int X2_SPAWN_INTERVAL = 50000; 
-const int X2_EFFECT_DURATION = 8000; 
-const int X2_MIN_BEERS = 35; 
-
-struct Beer {
-    int x, y, speed;
-    Uint32 spawnTime;
-};
-
-struct X2Icon {
-    int x, y;
-    bool active;
-    Uint32 spawnTime;
-    static const int WIDTH = 40;
-    static const int HEIGHT = 40;
-    static const int FALL_SPEED = 8;
-};
-
-bool showSpeedBoostMessage = false; 
-
+bool showSpeedBoostMessage = false;
 X2Icon x2Icon = {0, 0, false, 0};
 bool x2EffectActive = false;
 Uint32 x2EffectStartTime = 0;
-
-void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
-                       std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
-                       bool& speedBoostUnlocked, bool& showSpeedBoostMessage) {
-    gameStarted = false;
-    onFrameScreen = false;
-    onVipScreen = false;
-    paused = false;
-    beers.clear();
-    score = 0;
-    beer_speed = INITIAL_BEER_SPEED;
-    playerX = GAME_AREA_WIDTH / 2 - PLAYER_WIDTH / 2;
-    infoRect.x = SCREEN_WIDTH - BUTTON_SIZE - BUTTON_MARGIN;
-    max_beers = 1;
-    speedBoostUnlocked = false; 
-    showSpeedBoostMessage = false;
-    x2Icon.active = false;
-    x2EffectActive = false;
-}
-
-void playBackgroundMusicIfNotPlaying(Mix_Music* backgroundMusic, bool onFrameScreen, bool onVipScreen, bool gameStarted) {
-    if (!Mix_PlayingMusic() && !onFrameScreen && !onVipScreen && !gameStarted) {
-        Mix_PlayMusic(backgroundMusic, -1);
-    }
-}
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
