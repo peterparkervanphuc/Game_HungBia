@@ -2,21 +2,101 @@
 #include "include/SDL_image.h"
 #include "include/SDL_ttf.h"
 #include "include/SDL_mixer.h"
-#include "include/Constants.h"
-#include "include/Structures.h"
-#include "include/GameManager.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
 #include <vector>
-#include <string>
+#include <string> 
 
 #undef main
 
-bool showSpeedBoostMessage = false;
+const int SCREEN_WIDTH = 900;
+const int SCREEN_HEIGHT = 800;
+const int GAME_AREA_WIDTH = 600;
+const int INFO_AREA_WIDTH = 300;
+const int PLAYER_WIDTH = 150;
+const int PLAYER_HEIGHT = 80;
+const int BEER_WIDTH = 40;
+const int BEER_HEIGHT = 120;
+const int PLAYER_SPEED = 10;
+const float INITIAL_BEER_SPEED = 3.7; 
+int beer_speed = INITIAL_BEER_SPEED;
+int max_beers = 1;
+const int BEER_DELAY = 300;
+const int BUTTON_SIZE = 40;
+const int BUTTON_MARGIN = 10;
+const int X2_SPAWN_INTERVAL = 38000; 
+const int X2_EFFECT_DURATION = 8000; 
+const int X2_MIN_BEERS = 35; 
+
+// Thêm các hằng số cho shield
+const int SHIELD_SPAWN_INTERVAL = 47000;  // 47 giây
+const int SHIELD_EFFECT_DURATION = 12000;  // 12 giây
+const int SHIELD_MIN_BEERS = 100;  // Xuất hiện sau 100 chai
+const int SHIELD_MAX_MISSED = 2;  // Số chai được phép bỏ lỡ khi có shield
+
+struct Beer {
+    int x, y, speed;
+    Uint32 spawnTime;
+};
+
+struct X2Icon {
+    int x, y;
+    bool active;
+    Uint32 spawnTime;
+    static const int WIDTH = 40;
+    static const int HEIGHT = 40;
+    static const int FALL_SPEED = 8;
+};
+
+struct ShieldIcon {
+    int x, y;
+    bool active;
+    Uint32 spawnTime;
+    static const int WIDTH = 40;
+    static const int HEIGHT = 40;
+    static const int FALL_SPEED = 9;
+};
+
+bool showSpeedBoostMessage = false; 
+
 X2Icon x2Icon = {0, 0, false, 0};
 bool x2EffectActive = false;
 Uint32 x2EffectStartTime = 0;
+
+// Thêm biến quản lý shield
+ShieldIcon shieldIcon = {0, 0, false, 0};
+bool shieldEffectActive = false;
+Uint32 shieldEffectStartTime = 0;
+int missedBeers = 0;  // Đếm số bia bỏ lỡ khi có shield
+
+void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
+                       std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
+                       bool& speedBoostUnlocked, bool& showSpeedBoostMessage) {
+    gameStarted = false;
+    onFrameScreen = false;
+    onVipScreen = false;
+    paused = false;
+    beers.clear();
+    score = 0;
+    beer_speed = INITIAL_BEER_SPEED;
+    playerX = GAME_AREA_WIDTH / 2 - PLAYER_WIDTH / 2;
+    infoRect.x = SCREEN_WIDTH - BUTTON_SIZE - BUTTON_MARGIN;
+    max_beers = 1;
+    speedBoostUnlocked = false; 
+    showSpeedBoostMessage = false;
+    x2Icon.active = false;
+    x2EffectActive = false;
+    shieldIcon.active = false;
+    shieldEffectActive = false;
+    missedBeers = 0;
+}
+
+void playBackgroundMusicIfNotPlaying(Mix_Music* backgroundMusic, bool onFrameScreen, bool onVipScreen, bool gameStarted) {
+    if (!Mix_PlayingMusic() && !onFrameScreen && !onVipScreen && !gameStarted) {
+        Mix_PlayMusic(backgroundMusic, -1);
+    }
+}
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -138,6 +218,12 @@ int main(int argc, char* argv[]) {
     SDL_Texture* x2IconTexture = IMG_LoadTexture(renderer, "assets/x2.png");
     if (!x2IconTexture) {
         std::cerr << "Failed to load x2 icon: " << IMG_GetError() << std::endl;
+        return -1;
+    }
+
+    SDL_Texture* shieldIconTexture = IMG_LoadTexture(renderer, "assets/shield.png");
+    if (!shieldIconTexture) {
+        std::cerr << "Failed to load shield icon: " << IMG_GetError() << std::endl;
         return -1;
     }
 
@@ -343,6 +429,38 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
+                // Shield logic
+                if (shieldEffectActive && currentTime - shieldEffectStartTime >= SHIELD_EFFECT_DURATION) {
+                    shieldEffectActive = false;
+                    missedBeers = 0;  // Reset số bia bỏ lỡ khi hết hiệu ứng
+                }
+
+                if (score >= SHIELD_MIN_BEERS && !shieldIcon.active && 
+                    currentTime - shieldIcon.spawnTime >= SHIELD_SPAWN_INTERVAL) {
+                    shieldIcon.active = true;
+                    shieldIcon.x = rand() % (GAME_AREA_WIDTH - ShieldIcon::WIDTH);
+                    shieldIcon.y = 0;
+                    shieldIcon.spawnTime = currentTime;
+                }
+
+                if (shieldIcon.active) {
+                    shieldIcon.y += ShieldIcon::FALL_SPEED;
+
+                    if (shieldIcon.y + ShieldIcon::HEIGHT >= SCREEN_HEIGHT - PLAYER_HEIGHT &&
+                        shieldIcon.x + ShieldIcon::WIDTH > playerX && 
+                        shieldIcon.x < playerX + PLAYER_WIDTH) {
+                        shieldIcon.active = false;
+                        shieldEffectActive = true;
+                        shieldEffectStartTime = currentTime;
+                        missedBeers = 0;  // Reset số bia bỏ lỡ khi nhặt shield mới
+                        Mix_PlayChannel(-1, catchSound, 0);
+                    }
+
+                    if (shieldIcon.y > SCREEN_HEIGHT) {
+                        shieldIcon.active = false;
+                    }
+                }
+
                 if (score >= 60 && !speedBoostUnlocked) {
                     speedBoostUnlocked = true; 
                     showSpeedBoostMessage = true; 
@@ -363,19 +481,40 @@ int main(int argc, char* argv[]) {
                 for (auto& beer : beers) {
                     beer.y += beer.speed;
                     if (beer.y > SCREEN_HEIGHT) {
-                        Mix_PlayChannel(-1, failSound, 0);
-                        SDL_Surface* loseSurface = TTF_RenderText_Solid(loseFont, "YOU LOSE", whiteColor);
-                        SDL_Texture* loseTexture = SDL_CreateTextureFromSurface(renderer, loseSurface);
-                        SDL_Rect loseRect = {GAME_AREA_WIDTH / 2 - loseSurface->w / 2, SCREEN_HEIGHT / 2 - loseSurface->h / 2, loseSurface->w, loseSurface->h};
-                        SDL_FreeSurface(loseSurface);
-                        SDL_RenderCopy(renderer, loseTexture, NULL, &loseRect);
-                        SDL_RenderPresent(renderer);
-                        SDL_DestroyTexture(loseTexture);
+                        if (shieldEffectActive) {
+                            missedBeers++;
+                            if (missedBeers > SHIELD_MAX_MISSED) {
+                                Mix_PlayChannel(-1, failSound, 0);
+                                SDL_Surface* loseSurface = TTF_RenderText_Solid(loseFont, "YOU LOSE", whiteColor);
+                                SDL_Texture* loseTexture = SDL_CreateTextureFromSurface(renderer, loseSurface);
+                                SDL_Rect loseRect = {GAME_AREA_WIDTH / 2 - loseSurface->w / 2, SCREEN_HEIGHT / 2 - loseSurface->h / 2, loseSurface->w, loseSurface->h};
+                                SDL_FreeSurface(loseSurface);
+                                SDL_RenderCopy(renderer, loseTexture, NULL, &loseRect);
+                                SDL_RenderPresent(renderer);
+                                SDL_DestroyTexture(loseTexture);
 
-                        SDL_Delay(5000); 
-                        resetToHomeScreen(gameStarted, onFrameScreen, onVipScreen, paused, beers, score, beer_speed, playerX, infoRect, speedBoostUnlocked, showSpeedBoostMessage);
-                        playBackgroundMusicIfNotPlaying(backgroundMusic, onFrameScreen, onVipScreen, gameStarted);
-                        break;
+                                SDL_Delay(5000); 
+                                resetToHomeScreen(gameStarted, onFrameScreen, onVipScreen, paused, beers, score, beer_speed, playerX, infoRect, speedBoostUnlocked, showSpeedBoostMessage);
+                                playBackgroundMusicIfNotPlaying(backgroundMusic, onFrameScreen, onVipScreen, gameStarted);
+                                break;
+                            }
+                            beer.y = 0;
+                            beer.x = rand() % (GAME_AREA_WIDTH - BEER_WIDTH);
+                        } else {
+                            Mix_PlayChannel(-1, failSound, 0);
+                            SDL_Surface* loseSurface = TTF_RenderText_Solid(loseFont, "YOU LOSE", whiteColor);
+                            SDL_Texture* loseTexture = SDL_CreateTextureFromSurface(renderer, loseSurface);
+                            SDL_Rect loseRect = {GAME_AREA_WIDTH / 2 - loseSurface->w / 2, SCREEN_HEIGHT / 2 - loseSurface->h / 2, loseSurface->w, loseSurface->h};
+                            SDL_FreeSurface(loseSurface);
+                            SDL_RenderCopy(renderer, loseTexture, NULL, &loseRect);
+                            SDL_RenderPresent(renderer);
+                            SDL_DestroyTexture(loseTexture);
+
+                            SDL_Delay(5000); 
+                            resetToHomeScreen(gameStarted, onFrameScreen, onVipScreen, paused, beers, score, beer_speed, playerX, infoRect, speedBoostUnlocked, showSpeedBoostMessage);
+                            playBackgroundMusicIfNotPlaying(backgroundMusic, onFrameScreen, onVipScreen, gameStarted);
+                            break;
+                        }
                     }
                     if (beer.y + BEER_HEIGHT >= SCREEN_HEIGHT - PLAYER_HEIGHT && beer.x + BEER_WIDTH > playerX && beer.x < playerX + PLAYER_WIDTH) {
                         beer.y = 0;
@@ -385,23 +524,11 @@ int main(int argc, char* argv[]) {
                             score++;
                         }
 
-                        // Kiểm tra và thêm chai bia mới dựa trên score
-                        if (score >= 18 && score < 36 && beers.size() < 2) {
-                            beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
-                        } else if (score >= 36 && score < 54 && beers.size() < 3) {
-                            while (beers.size() < 3) {
-                                beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
-                            }
-                        } else if (score >= 54 && beers.size() < 4) {
-                            while (beers.size() < 4) {
-                                beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
-                            }
-                        }
 
                         std::cout << score << std::endl; 
                         Mix_PlayChannel(-1, catchSound, 0);
 
-                        if (score == 70) { 
+                        if (score >= 110) {  
                             gameStarted = false;
                             paused = false;
                             beers.clear();
@@ -485,6 +612,10 @@ int main(int argc, char* argv[]) {
                 SDL_Rect x2Rect = {x2Icon.x, x2Icon.y, X2Icon::WIDTH, X2Icon::HEIGHT};
                 SDL_RenderCopy(renderer, x2IconTexture, NULL, &x2Rect);
             }
+            if (shieldIcon.active) {
+                SDL_Rect shieldRect = {shieldIcon.x, shieldIcon.y, ShieldIcon::WIDTH, ShieldIcon::HEIGHT};
+                SDL_RenderCopy(renderer, shieldIconTexture, NULL, &shieldRect);
+            }
             SDL_RenderCopy(renderer, backButton, NULL, &backRect);
             SDL_RenderCopy(renderer, playPauseButton, NULL, &playPauseRect);
             SDL_RenderCopy(renderer, infoButton, NULL, &infoRect);
@@ -520,6 +651,20 @@ int main(int argc, char* argv[]) {
                     SDL_DestroyTexture(x2Texture);
                 }
             }
+
+            if (shieldEffectActive) {
+                int remainingTime = (SHIELD_EFFECT_DURATION - (SDL_GetTicks() - shieldEffectStartTime)) / 1000;
+                std::string shieldText = "SHIELD: " + std::to_string(remainingTime) + "s (Safe: " + 
+                                        std::to_string(SHIELD_MAX_MISSED - missedBeers) + ")";
+                SDL_Surface* shieldSurface = TTF_RenderText_Solid(scoreFont, shieldText.c_str(), whiteColor);
+                if (shieldSurface) {
+                    SDL_Texture* shieldTexture = SDL_CreateTextureFromSurface(renderer, shieldSurface);
+                    SDL_Rect shieldTextRect = {10, 70, shieldSurface->w, shieldSurface->h};
+                    SDL_RenderCopy(renderer, shieldTexture, NULL, &shieldTextRect);
+                    SDL_FreeSurface(shieldSurface);
+                    SDL_DestroyTexture(shieldTexture);
+                }
+            }
         }
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
@@ -543,6 +688,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(girl3Texture);
     SDL_DestroyTexture(hopThoaiTexture);
     SDL_DestroyTexture(x2IconTexture);
+    SDL_DestroyTexture(shieldIconTexture);
     TTF_Quit(); 
     SDL_Quit();
     return 0;
