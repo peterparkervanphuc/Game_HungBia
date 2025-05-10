@@ -29,10 +29,11 @@ const int X2_SPAWN_INTERVAL = 38000;
 const int X2_EFFECT_DURATION = 8000; 
 const int X2_MIN_BEERS = 35; 
 
-const int SHIELD_SPAWN_INTERVAL = 47000;  
-const int SHIELD_EFFECT_DURATION = 12000;  
-const int SHIELD_MIN_BEERS = 100;  
-const int SHIELD_MAX_MISSED = 2;  
+// Thêm các hằng số cho shield
+const int SHIELD_SPAWN_INTERVAL = 47000;  // 47 giây
+const int SHIELD_EFFECT_DURATION = 12000;  // 12 giây
+const int SHIELD_MIN_BEERS = 100;  // Xuất hiện sau 100 chai
+const int SHIELD_MAX_MISSED = 2;  // Số chai được phép bỏ lỡ khi có shield
 
 struct Beer {
     int x, y, speed;
@@ -63,10 +64,11 @@ X2Icon x2Icon = {0, 0, false, 0};
 bool x2EffectActive = false;
 Uint32 x2EffectStartTime = 0;
 
+// Thêm biến quản lý shield
 ShieldIcon shieldIcon = {0, 0, false, 0};
 bool shieldEffectActive = false;
 Uint32 shieldEffectStartTime = 0;
-int missedBeers = 0;
+int missedBeers = 0;  // Đếm số bia bỏ lỡ khi có shield
 
 void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
                        std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
