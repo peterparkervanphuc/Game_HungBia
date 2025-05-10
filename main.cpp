@@ -441,6 +441,20 @@ int main(int argc, char* argv[]) {
                         if (x2EffectActive) {
                             score++;
                         }
+
+                        // Kiểm tra và thêm chai bia mới dựa trên score
+                        if (score >= 18 && score < 36 && beers.size() < 2) {
+                            beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
+                        } else if (score >= 36 && score < 54 && beers.size() < 3) {
+                            while (beers.size() < 3) {
+                                beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
+                            }
+                        } else if (score >= 54 && beers.size() < 4) {
+                            while (beers.size() < 4) {
+                                beers.push_back({rand() % (GAME_AREA_WIDTH - BEER_WIDTH), 0, beer_speed, SDL_GetTicks()});
+                            }
+                        }
+
                         std::cout << score << std::endl; 
                         Mix_PlayChannel(-1, catchSound, 0);
 
