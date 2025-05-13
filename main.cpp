@@ -25,19 +25,24 @@ int max_beers = 1;
 const int BEER_DELAY = 300;
 const int BUTTON_SIZE = 40;
 const int BUTTON_MARGIN = 10;
-const int X2_SPAWN_INTERVAL = 38000; 
+const int X2_SPAWN_INTERVAL = 25000; 
 const int X2_EFFECT_DURATION = 8000; 
 const int X2_MIN_BEERS = 37; 
 
-const int SHIELD_SPAWN_INTERVAL = 47000;  
+const int SHIELD_SPAWN_INTERVAL = 35000;  
 const int SHIELD_EFFECT_DURATION = 12000;  
 const int SHIELD_MIN_BEERS = 100;  
 const int SHIELD_MAX_MISSED = 2;  
 
-// Thêm biến để lưu thời gian còn lại khi pause
+const int SLOW_SPAWN_INTERVAL = 35000;  
+const int SLOW_EFFECT_DURATION = 8000;  
+const int SLOW_MIN_BEERS = 76;  
+const float SLOW_EFFECT_RATE = 0.6f;  
+
 Uint32 pausedTime = 0;
 Uint32 x2PausedTime = 0;
 Uint32 shieldPausedTime = 0;
+Uint32 slowPausedTime = 0;
 
 struct Beer {
     int x, y, speed;
@@ -62,6 +67,15 @@ struct ShieldIcon {
     static const int FALL_SPEED = 9;
 };
 
+struct SlowIcon {
+    int x, y;
+    bool active;
+    Uint32 spawnTime;
+    static const int WIDTH = 40;
+    static const int HEIGHT = 40;
+    static const int FALL_SPEED = 7;
+};
+
 bool showSpeedBoostMessage = false; 
 
 X2Icon x2Icon = {0, 0, false, 0};
@@ -72,6 +86,10 @@ ShieldIcon shieldIcon = {0, 0, false, 0};
 bool shieldEffectActive = false;
 Uint32 shieldEffectStartTime = 0;
 int missedBeers = 0;
+
+SlowIcon slowIcon = {0, 0, false, 0};
+bool slowEffectActive = false;
+Uint32 slowEffectStartTime = 0;
 
 void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
                        std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
@@ -93,6 +111,8 @@ void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen
     shieldIcon.active = false;
     shieldEffectActive = false;
     missedBeers = 0;
+    slowIcon.active = false;
+    slowEffectActive = false;
 }
 
 void playBackgroundMusicIfNotPlaying(Mix_Music* backgroundMusic, bool onFrameScreen, bool onVipScreen, bool gameStarted) {
@@ -230,6 +250,12 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
+    SDL_Texture* slowIconTexture = IMG_LoadTexture(renderer, "assets/slow.png");
+    if (!slowIconTexture) {
+        std::cerr << "Failed to load slow icon: " << IMG_GetError() << std::endl;
+        return -1;
+    }
+
     int playerX = GAME_AREA_WIDTH / 2 - PLAYER_WIDTH / 2;
     std::vector<Beer> beers;
     int score = 0;
@@ -299,7 +325,6 @@ int main(int argc, char* argv[]) {
                 } else if (gameStarted && x >= playPauseRect.x && x <= playPauseRect.x + playPauseRect.w &&
                            y >= playPauseRect.y && y <= playPauseRect.y + playPauseRect.h) {
                     if (!paused) {
-                        // Lưu thời điểm pause
                         pausedTime = SDL_GetTicks();
                         if (x2EffectActive) {
                             x2PausedTime = pausedTime - x2EffectStartTime;
@@ -307,13 +332,18 @@ int main(int argc, char* argv[]) {
                         if (shieldEffectActive) {
                             shieldPausedTime = pausedTime - shieldEffectStartTime;
                         }
+                        if (slowEffectActive) {
+                            slowPausedTime = pausedTime - slowEffectStartTime;
+                        }
                     } else {
-                        // Cập nhật lại thời điểm bắt đầu effect khi unpause
                         if (x2EffectActive) {
                             x2EffectStartTime = SDL_GetTicks() - x2PausedTime;
                         }
                         if (shieldEffectActive) {
                             shieldEffectStartTime = SDL_GetTicks() - shieldPausedTime;
+                        }
+                        if (slowEffectActive) {
+                            slowEffectStartTime = SDL_GetTicks() - slowPausedTime;
                         }
                     }
                     paused = !paused;
@@ -348,7 +378,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         
         if (showInfoPopup) {
-            SDL_Rect popupRect = {SCREEN_WIDTH / 2 - 200, 0, 400, SCREEN_HEIGHT}; 
+            SDL_Rect popupRect = {SCREEN_WIDTH / 2 - 250, 0, 500, SCREEN_HEIGHT}; 
             SDL_RenderCopy(renderer, infoPopupTexture, NULL, &popupRect);
         } else if (onVipScreen) {
             SDL_Rect greenBackgroundRect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
@@ -478,6 +508,41 @@ int main(int argc, char* argv[]) {
 
                     if (shieldIcon.y > SCREEN_HEIGHT) {
                         shieldIcon.active = false;
+                    }
+                }
+
+                if (slowEffectActive && currentTime - slowEffectStartTime >= SLOW_EFFECT_DURATION) {
+                    slowEffectActive = false;
+                    for (auto& beer : beers) {
+                        beer.speed = beer_speed;
+                    }
+                }
+
+                if (score >= SLOW_MIN_BEERS && !slowIcon.active && 
+                    currentTime - slowIcon.spawnTime >= SLOW_SPAWN_INTERVAL) {
+                    slowIcon.active = true;
+                    slowIcon.x = rand() % (GAME_AREA_WIDTH - SlowIcon::WIDTH);
+                    slowIcon.y = 0;
+                    slowIcon.spawnTime = currentTime;
+                }
+
+                if (slowIcon.active) {
+                    slowIcon.y += SlowIcon::FALL_SPEED;
+
+                    if (slowIcon.y + SlowIcon::HEIGHT >= SCREEN_HEIGHT - PLAYER_HEIGHT &&
+                        slowIcon.x + SlowIcon::WIDTH > playerX && 
+                        slowIcon.x < playerX + PLAYER_WIDTH) {
+                        slowIcon.active = false;
+                        slowEffectActive = true;
+                        slowEffectStartTime = currentTime;
+                        for (auto& beer : beers) {
+                            beer.speed = beer_speed * SLOW_EFFECT_RATE;
+                        }
+                        Mix_PlayChannel(-1, catchSound, 0);
+                    }
+
+                    if (slowIcon.y > SCREEN_HEIGHT) {
+                        slowIcon.active = false;
                     }
                 }
 
@@ -636,6 +701,10 @@ int main(int argc, char* argv[]) {
                 SDL_Rect shieldRect = {shieldIcon.x, shieldIcon.y, ShieldIcon::WIDTH, ShieldIcon::HEIGHT};
                 SDL_RenderCopy(renderer, shieldIconTexture, NULL, &shieldRect);
             }
+            if (slowIcon.active) {
+                SDL_Rect slowRect = {slowIcon.x, slowIcon.y, SlowIcon::WIDTH, SlowIcon::HEIGHT};
+                SDL_RenderCopy(renderer, slowIconTexture, NULL, &slowRect);
+            }
             SDL_RenderCopy(renderer, backButton, NULL, &backRect);
             SDL_RenderCopy(renderer, playPauseButton, NULL, &playPauseRect);
             SDL_RenderCopy(renderer, infoButton, NULL, &infoRect);
@@ -685,6 +754,19 @@ int main(int argc, char* argv[]) {
                     SDL_DestroyTexture(shieldTexture);
                 }
             }
+
+            if (slowEffectActive) {
+                int remainingTime = (SLOW_EFFECT_DURATION - (SDL_GetTicks() - slowEffectStartTime)) / 1000;
+                std::string slowText = "SLOW: " + std::to_string(remainingTime) + "s";
+                SDL_Surface* slowSurface = TTF_RenderText_Solid(scoreFont, slowText.c_str(), whiteColor);
+                if (slowSurface) {
+                    SDL_Texture* slowTexture = SDL_CreateTextureFromSurface(renderer, slowSurface);
+                    SDL_Rect slowTextRect = {10, 100, slowSurface->w, slowSurface->h};
+                    SDL_RenderCopy(renderer, slowTexture, NULL, &slowTextRect);
+                    SDL_FreeSurface(slowSurface);
+                    SDL_DestroyTexture(slowTexture);
+                }
+            }
         }
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
@@ -709,6 +791,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(hopThoaiTexture);
     SDL_DestroyTexture(x2IconTexture);
     SDL_DestroyTexture(shieldIconTexture);
+    SDL_DestroyTexture(slowIconTexture);
     TTF_Quit(); 
     SDL_Quit();
     return 0;
