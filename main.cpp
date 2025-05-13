@@ -27,13 +27,17 @@ const int BUTTON_SIZE = 40;
 const int BUTTON_MARGIN = 10;
 const int X2_SPAWN_INTERVAL = 38000; 
 const int X2_EFFECT_DURATION = 8000; 
-const int X2_MIN_BEERS = 35; 
+const int X2_MIN_BEERS = 37; 
 
-// Thêm các hằng số cho shield
-const int SHIELD_SPAWN_INTERVAL = 47000;  // 47 giây
-const int SHIELD_EFFECT_DURATION = 12000;  // 12 giây
-const int SHIELD_MIN_BEERS = 100;  // Xuất hiện sau 100 chai
-const int SHIELD_MAX_MISSED = 2;  // Số chai được phép bỏ lỡ khi có shield
+const int SHIELD_SPAWN_INTERVAL = 47000;  
+const int SHIELD_EFFECT_DURATION = 12000;  
+const int SHIELD_MIN_BEERS = 100;  
+const int SHIELD_MAX_MISSED = 2;  
+
+// Thêm biến để lưu thời gian còn lại khi pause
+Uint32 pausedTime = 0;
+Uint32 x2PausedTime = 0;
+Uint32 shieldPausedTime = 0;
 
 struct Beer {
     int x, y, speed;
@@ -64,11 +68,10 @@ X2Icon x2Icon = {0, 0, false, 0};
 bool x2EffectActive = false;
 Uint32 x2EffectStartTime = 0;
 
-// Thêm biến quản lý shield
 ShieldIcon shieldIcon = {0, 0, false, 0};
 bool shieldEffectActive = false;
 Uint32 shieldEffectStartTime = 0;
-int missedBeers = 0;  // Đếm số bia bỏ lỡ khi có shield
+int missedBeers = 0;
 
 void resetToHomeScreen(bool& gameStarted, bool& onFrameScreen, bool& onVipScreen, bool& paused, 
                        std::vector<Beer>& beers, int& score, int& beer_speed, int& playerX, SDL_Rect& infoRect, 
@@ -295,6 +298,24 @@ int main(int argc, char* argv[]) {
                     }
                 } else if (gameStarted && x >= playPauseRect.x && x <= playPauseRect.x + playPauseRect.w &&
                            y >= playPauseRect.y && y <= playPauseRect.y + playPauseRect.h) {
+                    if (!paused) {
+                        // Lưu thời điểm pause
+                        pausedTime = SDL_GetTicks();
+                        if (x2EffectActive) {
+                            x2PausedTime = pausedTime - x2EffectStartTime;
+                        }
+                        if (shieldEffectActive) {
+                            shieldPausedTime = pausedTime - shieldEffectStartTime;
+                        }
+                    } else {
+                        // Cập nhật lại thời điểm bắt đầu effect khi unpause
+                        if (x2EffectActive) {
+                            x2EffectStartTime = SDL_GetTicks() - x2PausedTime;
+                        }
+                        if (shieldEffectActive) {
+                            shieldEffectStartTime = SDL_GetTicks() - shieldPausedTime;
+                        }
+                    }
                     paused = !paused;
                 } else if (gameStarted && x >= backRect.x && x <= backRect.x + backRect.w &&
                            y >= backRect.y && y <= backRect.y + backRect.h) {
