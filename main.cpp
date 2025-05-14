@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         
         if (showInfoPopup) {
-            SDL_Rect popupRect = {SCREEN_WIDTH / 2 - 250, 0, 500, SCREEN_HEIGHT}; 
+            SDL_Rect popupRect = {SCREEN_WIDTH / 2 - 350, 50, 700, SCREEN_HEIGHT - 100}; 
             SDL_RenderCopy(renderer, infoPopupTexture, NULL, &popupRect);
         } else if (onVipScreen) {
             SDL_Rect greenBackgroundRect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
